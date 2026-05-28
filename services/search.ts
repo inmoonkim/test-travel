@@ -1,5 +1,22 @@
-import { getAmadeusClient } from "@/lib/amadeus";
+import { serpApiGet } from "@/lib/serpapi";
 import type { SearchParams, FlightOffer } from "@/types/search";
+
+interface SerpFlight {
+  departure_airport: { id: string; time: string };
+  arrival_airport: { id: string; time: string };
+  airline: string;
+  flight_number: string;
+}
+
+interface SerpFlightOption {
+  flights: SerpFlight[];
+  price: number;
+}
+
+interface SerpFlightsResponse {
+  best_flights?: SerpFlightOption[];
+  other_flights?: SerpFlightOption[];
+}
 
 function toLocalDateStr(date: Date): string {
   const y = date.getFullYear();
@@ -22,44 +39,45 @@ function eachDate(from: string, to: string): string[] {
 export async function fetchFlightDayPrices(
   params: SearchParams
 ): Promise<Record<string, FlightOffer[]>> {
-  const amadeus = getAmadeusClient();
   const dates = eachDate(params.departFrom, params.departTo);
   const result: Record<string, FlightOffer[]> = {};
 
   await Promise.all(
     dates.map(async (date) => {
-      const response = await amadeus.shopping.flightOffersSearch.get({
-        originLocationCode: params.origin,
-        destinationLocationCode: params.destination,
-        departureDate: date,
-        returnDate: params.returnFrom,
+      const serpParams: Record<string, string | number> = {
+        engine: "google_flights",
+        departure_id: params.origin,
+        arrival_id: params.destination,
+        outbound_date: date,
         adults: params.adults,
-        children: params.children > 0 ? params.children : undefined,
-        max: 5,
-      });
+        currency: "KRW",
+      };
+      if (params.children > 0) serpParams.children = params.children;
+      if (params.returnFrom) serpParams.return_date = params.returnFrom;
 
-      const offers: FlightOffer[] = (response.data ?? []).map((raw: unknown) => {
-        const offer = raw as Record<string, unknown>;
-        const itinerary = (offer.itineraries as Record<string, unknown>[])?.[0];
-        const segment = (itinerary?.segments as Record<string, unknown>[])?.[0];
-        const price = offer.price as Record<string, unknown>;
-        const validatingCarrier = (offer.validatingAirlineCodes as string[])?.[0] ?? "";
-        const flightNum = segment
-          ? `${(segment.carrierCode as string) ?? ""}${(segment.number as string) ?? ""}`
-          : "";
+      try {
+        const data = (await serpApiGet(serpParams)) as SerpFlightsResponse;
+        const allOptions = [
+          ...(data.best_flights ?? []),
+          ...(data.other_flights ?? []),
+        ];
 
-        return {
-          id: offer.id as string,
-          airline: validatingCarrier,
-          flightNumber: flightNum,
-          departureTime: (segment?.departure as Record<string, unknown>)?.at as string ?? "",
-          arrivalTime: (segment?.arrival as Record<string, unknown>)?.at as string ?? "",
-          price: Math.round(parseFloat((price?.grandTotal as string) ?? "0") * 1300),
-          bookingUrl: `https://www.amadeus.com/`,
-        };
-      });
-
-      result[date] = offers;
+        result[date] = allOptions.slice(0, 5).map((option, i) => {
+          const first = option.flights[0];
+          const last = option.flights[option.flights.length - 1];
+          return {
+            id: `${first.flight_number}-${date}-${i}`,
+            airline: first.airline,
+            flightNumber: first.flight_number,
+            departureTime: first.departure_airport.time,
+            arrivalTime: last.arrival_airport.time,
+            price: option.price,
+            bookingUrl: "https://www.google.com/travel/flights",
+          };
+        });
+      } catch {
+        result[date] = [];
+      }
     })
   );
 

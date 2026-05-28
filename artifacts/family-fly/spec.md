@@ -22,7 +22,7 @@
 - 가족 구성원 일정 공유 / 초대 — 날짜 탐색 핵심이 검증된 뒤 Phase 2
 - 웹 푸시 알림 — 이메일 알림로 먼저 검증 후 결정
 - 모바일 네이티브 앱
-- 항공·호텔 스크래핑 — 법적 리스크. Amadeus·공개 API만 사용
+- 앱 내 직접 스크래핑 — SerpAPI 등 법적 책임이 위임된 중간 API 계층은 허용
 
 ---
 
@@ -172,7 +172,7 @@
 
 ## 의존성
 
-- 항공 가격 데이터: Amadeus Flight Offers API (또는 동급 공개 API)
+- 항공 가격 데이터: SerpAPI Google Flights API
 - 호텔 가격 데이터: 공개 호텔 가격 API (Booking.com Affiliate, RapidAPI 등 — 가입 후 확정)
 - 이메일 발송: 외부 이메일 발송 서비스 (발송 서비스 선정은 plan.md에서 결정)
 
@@ -180,5 +180,5 @@
 
 ## 미결정 항목
 
-- 호텔 API 파트너 확정: Booking.com Affiliate는 파트너십 심사가 필요하므로 대안(RapidAPI Hotels, Amadeus Hotel Search)으로 시작할 수 있음
+- 호텔 API: SerpAPI Google Hotels API 사용 (Booking.com Affiliate 심사 불필요)
 - 달력에서 표시하는 기간이 너무 넓을 경우(예: 출발일 범위 30일 이상) API 호출 비용·한도 초과 여부 — 검색 범위 상한을 두어야 할 수 있음

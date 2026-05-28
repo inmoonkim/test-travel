@@ -1,56 +1,45 @@
-import { getAmadeusClient } from "@/lib/amadeus";
+import { serpApiGet } from "@/lib/serpapi";
 import type { SearchParams, HotelOffer } from "@/types/search";
 
-const CITY_CODE_MAP: Record<string, string> = {
-  ICN: "SEL",
-  GMP: "SEL",
-  NRT: "TYO",
-  HND: "TYO",
-  CDG: "PAR",
-  LHR: "LON",
-  JFK: "NYC",
-  LAX: "LAX",
-  SIN: "SIN",
-  BKK: "BKK",
-  HKG: "HKG",
-  DPS: "DPS",
+const CITY_NAME_MAP: Record<string, string> = {
+  ICN: "Seoul",
+  GMP: "Seoul",
+  NRT: "Tokyo",
+  HND: "Tokyo",
+  CDG: "Paris",
+  LHR: "London",
+  JFK: "New York",
+  LAX: "Los Angeles",
+  SIN: "Singapore",
+  BKK: "Bangkok",
+  HKG: "Hong Kong",
+  DPS: "Bali",
 };
 
-function toCityCode(iataCode: string): string {
-  return CITY_CODE_MAP[iataCode.toUpperCase()] ?? iataCode;
+interface SerpHotelProperty {
+  name: string;
+  link?: string;
+  property_token?: string;
+  rate_per_night?: { extracted_lowest?: number };
 }
 
-async function getHotelIdsByCity(cityCode: string): Promise<string[]> {
-  const amadeus = getAmadeusClient();
-  const response = await amadeus.referenceData.locations.hotels.byCity.get({
-    cityCode,
-    radius: 20,
-    radiusUnit: "KM",
-  });
-  return (response.data as { hotelId: string }[])
-    .slice(0, 20)
-    .map((h) => h.hotelId);
+interface SerpHotelsResponse {
+  properties?: SerpHotelProperty[];
+}
+
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export async function fetchHotelDayPrices(
   params: SearchParams
 ): Promise<Record<string, HotelOffer[]>> {
-  const amadeus = getAmadeusClient();
-  const cityCode = toCityCode(params.destination);
-  const hotelIds = await getHotelIdsByCity(cityCode);
+  const cityName =
+    CITY_NAME_MAP[params.destination.toUpperCase()] ?? params.destination;
 
-  if (hotelIds.length === 0) return {};
-
-  const result: Record<string, HotelOffer[]> = {};
-
-  function toLocalDateStr(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  // Determine unique check-in dates from departFrom..departTo range
   const cur = new Date(params.departFrom + "T00:00:00");
   const end = new Date(params.departTo + "T00:00:00");
   const dates: string[] = [];
@@ -59,39 +48,36 @@ export async function fetchHotelDayPrices(
     cur.setDate(cur.getDate() + 1);
   }
 
+  const result: Record<string, HotelOffer[]> = {};
+
   await Promise.all(
     dates.map(async (checkIn) => {
-      const checkOut = new Date(checkIn + "T00:00:00");
-      checkOut.setDate(checkOut.getDate() + 1);
-      const checkOutStr = toLocalDateStr(checkOut);
+      const nextDay = new Date(checkIn + "T00:00:00");
+      nextDay.setDate(nextDay.getDate() + 1);
+      const checkOut = toLocalDateStr(nextDay);
 
       try {
-        const response = await amadeus.shopping.hotelOffersSearch.get({
-          hotelIds: hotelIds.join(","),
-          checkInDate: checkIn,
-          checkOutDate: checkOutStr,
+        const data = (await serpApiGet({
+          engine: "google_hotels",
+          q: `Hotels in ${cityName}`,
+          check_in_date: checkIn,
+          check_out_date: checkOut,
           adults: params.adults,
-          roomQuantity: 1,
-        });
+          currency: "KRW",
+        })) as SerpHotelsResponse;
 
-        const offers: HotelOffer[] = (response.data as unknown[]).map((raw: unknown) => {
-          const item = raw as Record<string, unknown>;
-          const hotel = item.hotel as Record<string, unknown>;
-          const offerArr = item.offers as Record<string, unknown>[];
-          const offer = offerArr?.[0];
-          const priceObj = offer?.price as Record<string, unknown> | undefined;
-          const total = parseFloat((priceObj?.total as string) ?? "0");
+        const offers: HotelOffer[] = (data.properties ?? [])
+          .slice(0, 10)
+          .map((h, i) => ({
+            id: h.property_token ?? `hotel-${checkIn}-${i}`,
+            hotelId: h.property_token ?? `hotel-${checkIn}-${i}`,
+            hotelName: h.name,
+            nightlyRate: h.rate_per_night?.extracted_lowest ?? 0,
+            bookingUrl: h.link ?? "https://www.google.com/travel/hotels",
+          }))
+          .filter((o) => o.nightlyRate > 0);
 
-          return {
-            id: String(item.type ?? "") + String(hotel?.hotelId ?? ""),
-            hotelId: String(hotel?.hotelId ?? ""),
-            hotelName: String(hotel?.name ?? "Unknown Hotel"),
-            nightlyRate: Math.round(total * 1300),
-            bookingUrl: `https://www.booking.com/`,
-          };
-        });
-
-        result[checkIn] = offers.filter((o) => o.nightlyRate > 0);
+        result[checkIn] = offers;
       } catch {
         result[checkIn] = [];
       }

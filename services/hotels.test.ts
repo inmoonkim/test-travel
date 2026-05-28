@@ -1,44 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchHotelDayPrices } from "./hotels";
 
-vi.mock("@/lib/amadeus", () => ({
-  getAmadeusClient: vi.fn(),
+vi.mock("@/lib/serpapi", () => ({
+  serpApiGet: vi.fn(),
 }));
 
-import { getAmadeusClient } from "@/lib/amadeus";
+import { serpApiGet } from "@/lib/serpapi";
 
-const mockHotelData = [
+const mockProperties = [
   {
-    type: "hotel-offers",
-    hotel: { hotelId: "HTPAR001", name: "Hotel Paris Central" },
-    offers: [{ price: { total: "80.00" } }],
+    name: "Hotel Paris Central",
+    property_token: "token-001",
+    link: "https://www.ritzcarlton.com/paris",
+    rate_per_night: { extracted_lowest: 104000 },
   },
   {
-    type: "hotel-offers",
-    hotel: { hotelId: "HTPAR002", name: "Hotel Paris West" },
-    offers: [{ price: { total: "100.00" } }],
+    name: "Hotel Paris West",
+    property_token: "token-002",
+    link: "https://www.marriott.com/paris",
+    rate_per_night: { extracted_lowest: 130000 },
   },
 ];
 
 describe("fetchHotelDayPrices", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const mockByCityGet = vi.fn().mockResolvedValue({
-      data: [{ hotelId: "HTPAR001" }, { hotelId: "HTPAR002" }],
-    });
-    const mockHotelOffersGet = vi.fn().mockResolvedValue({ data: mockHotelData });
-    vi.mocked(getAmadeusClient).mockReturnValue({
-      referenceData: {
-        locations: {
-          hotels: {
-            byCity: { get: mockByCityGet },
-          },
-        },
-      },
-      shopping: {
-        hotelOffersSearch: { get: mockHotelOffersGet },
-      },
-    } as unknown as ReturnType<typeof getAmadeusClient>);
+    vi.mocked(serpApiGet).mockResolvedValue({ properties: mockProperties });
   });
 
   it("returns HotelOffers keyed by check-in date", async () => {
@@ -57,7 +44,7 @@ describe("fetchHotelDayPrices", () => {
     expect(result["2026-06-15"]).toHaveLength(2);
   });
 
-  it("maps hotel price from USD to KRW (x1300)", async () => {
+  it("uses SerpAPI rate_per_night.extracted_lowest directly as KRW", async () => {
     const result = await fetchHotelDayPrices({
       origin: "ICN",
       destination: "NRT",
@@ -69,8 +56,8 @@ describe("fetchHotelDayPrices", () => {
       children: 0,
     });
 
-    const paris = result["2026-06-15"].find((h) => h.hotelId === "HTPAR001");
-    expect(paris?.nightlyRate).toBe(Math.round(80 * 1300));
+    const central = result["2026-06-15"].find((h) => h.hotelId === "token-001");
+    expect(central?.nightlyRate).toBe(104000);
   });
 
   it("generates one key per date in the range", async () => {
@@ -92,14 +79,8 @@ describe("fetchHotelDayPrices", () => {
     ]);
   });
 
-  it("returns empty object when no hotels found in city", async () => {
-    const mockGet = vi.fn().mockResolvedValue({ data: [] });
-    vi.mocked(getAmadeusClient).mockReturnValue({
-      referenceData: {
-        locations: { hotels: { byCity: { get: mockGet } } },
-      },
-      shopping: { hotelOffersSearch: { get: vi.fn() } },
-    } as unknown as ReturnType<typeof getAmadeusClient>);
+  it("returns empty array for date when no properties returned", async () => {
+    vi.mocked(serpApiGet).mockResolvedValue({ properties: [] });
 
     const result = await fetchHotelDayPrices({
       origin: "ICN",
@@ -112,6 +93,6 @@ describe("fetchHotelDayPrices", () => {
       children: 0,
     });
 
-    expect(result).toEqual({});
+    expect(result["2026-06-15"]).toEqual([]);
   });
 });

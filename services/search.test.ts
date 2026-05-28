@@ -1,41 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchFlightDayPrices } from "./search";
 
-vi.mock("@/lib/amadeus", () => ({
-  getAmadeusClient: vi.fn(),
+vi.mock("@/lib/serpapi", () => ({
+  serpApiGet: vi.fn(),
 }));
 
-import { getAmadeusClient } from "@/lib/amadeus";
+import { serpApiGet } from "@/lib/serpapi";
 
-const mockFlightOffer = (id: string, grandTotal: string) => ({
-  id,
-  validatingAirlineCodes: ["KE"],
-  itineraries: [
+const mockSerpFlight = (flightNumber: string, price: number) => ({
+  flights: [
     {
-      segments: [
-        {
-          carrierCode: "KE",
-          number: "123",
-          departure: { at: "2026-06-15T10:00:00" },
-          arrival: { at: "2026-06-15T12:00:00" },
-        },
-      ],
+      departure_airport: { id: "ICN", time: "2026-06-15 10:00" },
+      arrival_airport: { id: "NRT", time: "2026-06-15 12:00" },
+      airline: "Korean Air",
+      flight_number: flightNumber,
     },
   ],
-  price: { grandTotal },
+  price,
 });
 
 describe("fetchFlightDayPrices", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const mockGet = vi.fn().mockResolvedValue({
-      data: [mockFlightOffer("offer-1", "150.00")],
+    vi.mocked(serpApiGet).mockResolvedValue({
+      best_flights: [mockSerpFlight("KE 123", 195000)],
     });
-    vi.mocked(getAmadeusClient).mockReturnValue({
-      shopping: {
-        flightOffersSearch: { get: mockGet },
-      },
-    } as unknown as ReturnType<typeof getAmadeusClient>);
   });
 
   it("returns FlightOffers keyed by departure date", async () => {
@@ -53,13 +42,12 @@ describe("fetchFlightDayPrices", () => {
     expect(result["2026-06-15"]).toBeDefined();
     expect(result["2026-06-15"]).toHaveLength(1);
     expect(result["2026-06-15"][0]).toMatchObject({
-      id: "offer-1",
-      airline: "KE",
-      flightNumber: "KE123",
+      airline: "Korean Air",
+      flightNumber: "KE 123",
     });
   });
 
-  it("maps price grandTotal from USD to KRW (x1300 approx)", async () => {
+  it("uses SerpAPI price directly in KRW", async () => {
     const result = await fetchFlightDayPrices({
       origin: "ICN",
       destination: "NRT",
@@ -71,7 +59,7 @@ describe("fetchFlightDayPrices", () => {
       children: 0,
     });
 
-    expect(result["2026-06-15"][0].price).toBe(Math.round(150.0 * 1300));
+    expect(result["2026-06-15"][0].price).toBe(195000);
   });
 
   it("generates one key per date in the range", async () => {
