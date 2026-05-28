@@ -12,6 +12,25 @@ function getResend(): Resend {
 
 const FROM_EMAIL = "FamilyFly <noreply@familyfly.app>";
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return "#";
+    return parsed.href;
+  } catch {
+    return "#";
+  }
+}
+
 export interface PriceDropHit {
   type: "flight" | "hotel";
   currentPrice: number;
@@ -31,12 +50,12 @@ export async function sendPriceDropAlert(
 
   const html = `
     <h2>가격 하락 알림</h2>
-    <p><strong>${hit.itemName}</strong></p>
+    <p><strong>${escapeHtml(hit.itemName)}</strong></p>
     <p>현재 가격: <strong>₩${hit.currentPrice.toLocaleString("ko-KR")}</strong></p>
     <p>목표가 대비 하락: ₩${drop.toLocaleString("ko-KR")}</p>
-    <p><a href="${hit.bookingUrl}">예약하기</a></p>
+    <p><a href="${safeUrl(hit.bookingUrl)}">예약하기</a></p>
     <hr/>
-    <p style="font-size:12px;color:#999;"><a href="${cancelUrl}">알림 취소</a></p>
+    <p style="font-size:12px;color:#999;"><a href="${safeUrl(cancelUrl)}">알림 취소</a></p>
   `;
 
   const client = getResend();

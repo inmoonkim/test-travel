@@ -10,8 +10,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
-  if (!body.email) {
-    return NextResponse.json({ error: "email is required" }, { status: 400 });
+  if (!body.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+    return NextResponse.json({ error: "valid email is required" }, { status: 400 });
   }
 
   const hasFlight = body.flight_target_price != null && body.flight_target_price > 0;

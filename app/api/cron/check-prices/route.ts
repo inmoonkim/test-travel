@@ -12,7 +12,16 @@ function authorised(request: NextRequest): boolean {
   return authHeader === `Bearer ${secret}`;
 }
 
+const COOLDOWN_HOURS = 24;
+
+function withinCooldown(alert: PriceAlert): boolean {
+  if (!alert.last_notified_at) return false;
+  const msSince = Date.now() - new Date(alert.last_notified_at).getTime();
+  return msSince < COOLDOWN_HOURS * 60 * 60 * 1000;
+}
+
 async function checkAlert(alert: PriceAlert): Promise<number> {
+  if (withinCooldown(alert)) return 0;
   const params = {
     origin: alert.origin,
     destination: alert.destination,

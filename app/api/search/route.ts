@@ -21,9 +21,13 @@ export async function GET(request: NextRequest) {
     departTo: sp.get("departTo")!,
     returnFrom: sp.get("returnFrom")!,
     returnTo: sp.get("returnTo")!,
-    adults: parseInt(sp.get("adults")!),
-    children: parseInt(sp.get("children") ?? "0"),
+    adults: Number(sp.get("adults")),
+    children: Number(sp.get("children") ?? "0"),
   };
+
+  if (!Number.isInteger(params.adults) || params.adults < 1) {
+    return NextResponse.json({ error: "adults must be a positive integer" }, { status: 400 });
+  }
 
   try {
     const [flightsByDate, hotelsByDate] = await Promise.all([

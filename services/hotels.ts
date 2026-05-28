@@ -43,20 +43,27 @@ export async function fetchHotelDayPrices(
 
   const result: Record<string, HotelOffer[]> = {};
 
+  function toLocalDateStr(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
   // Determine unique check-in dates from departFrom..departTo range
-  const cur = new Date(params.departFrom);
-  const end = new Date(params.departTo);
+  const cur = new Date(params.departFrom + "T00:00:00");
+  const end = new Date(params.departTo + "T00:00:00");
   const dates: string[] = [];
   while (cur <= end) {
-    dates.push(cur.toISOString().slice(0, 10));
+    dates.push(toLocalDateStr(cur));
     cur.setDate(cur.getDate() + 1);
   }
 
   await Promise.all(
     dates.map(async (checkIn) => {
-      const checkOut = new Date(checkIn);
+      const checkOut = new Date(checkIn + "T00:00:00");
       checkOut.setDate(checkOut.getDate() + 1);
-      const checkOutStr = checkOut.toISOString().slice(0, 10);
+      const checkOutStr = toLocalDateStr(checkOut);
 
       try {
         const response = await amadeus.shopping.hotelOffersSearch.get({

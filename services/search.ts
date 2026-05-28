@@ -1,12 +1,19 @@
 import { getAmadeusClient } from "@/lib/amadeus";
 import type { SearchParams, FlightOffer } from "@/types/search";
 
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function eachDate(from: string, to: string): string[] {
   const dates: string[] = [];
-  const cur = new Date(from);
-  const end = new Date(to);
+  const cur = new Date(from + "T00:00:00");
+  const end = new Date(to + "T00:00:00");
   while (cur <= end) {
-    dates.push(cur.toISOString().slice(0, 10));
+    dates.push(toLocalDateStr(cur));
     cur.setDate(cur.getDate() + 1);
   }
   return dates;
