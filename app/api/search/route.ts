@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchFlightDayPrices } from "@/services/search";
-import type { SearchParams } from "@/types/search";
+import { fetchHotelDayPrices } from "@/services/hotels";
+import type { SearchParams, DayPrice, ComboOffer } from "@/types/search";
 
 const REQUIRED = ["origin", "destination", "departFrom", "departTo", "returnFrom", "returnTo", "adults"] as const;
 
@@ -25,14 +26,33 @@ export async function GET(request: NextRequest) {
   };
 
   try {
-    const flightsByDate = await fetchFlightDayPrices(params);
+    const [flightsByDate, hotelsByDate] = await Promise.all([
+      fetchFlightDayPrices(params),
+      fetchHotelDayPrices(params),
+    ]);
 
-    const dates: Record<string, { minFlightPrice: number | null }> = {};
-    for (const [date, offers] of Object.entries(flightsByDate)) {
-      const prices = offers.map((o) => o.price);
-      dates[date] = {
-        minFlightPrice: prices.length > 0 ? Math.min(...prices) : null,
-      };
+    const dates: Record<string, DayPrice> = {};
+
+    for (const date of Object.keys(flightsByDate)) {
+      const flights = flightsByDate[date] ?? [];
+      const hotels = hotelsByDate[date] ?? [];
+
+      const combos: ComboOffer[] = [];
+      for (const flight of flights) {
+        for (const hotel of hotels) {
+          combos.push({
+            flight,
+            hotel,
+            combinedPrice: flight.price + hotel.nightlyRate,
+          });
+        }
+      }
+
+      combos.sort((a, b) => a.combinedPrice - b.combinedPrice);
+
+      const minPrice = combos.length > 0 ? combos[0].combinedPrice : null;
+
+      dates[date] = { date, minPrice, combos };
     }
 
     return NextResponse.json({ dates });
