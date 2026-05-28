@@ -45,6 +45,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# sqlite database
+app.db
+
 # claude local settings
 .claude/settings.local.json
 
