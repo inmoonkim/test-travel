@@ -5,6 +5,7 @@ import { SearchForm } from "@/components/family-fly/SearchForm";
 import { PriceCalendar } from "@/components/family-fly/PriceCalendar";
 import { ComboList } from "@/components/family-fly/ComboList";
 import { Button } from "@/components/ui/button";
+import { AlertForm } from "@/components/family-fly/AlertForm";
 
 export default function Page() {
   const { state, lastParams, search, selectDate, backToCalendar, openAlertForm } = useSearch();
@@ -76,10 +77,20 @@ export default function Page() {
         </div>
       )}
 
-      {/* Alert Form placeholder — Task 8 will wire this up */}
-      {showAlertForm && (
-        <div className="mt-4 rounded border p-4 text-sm text-muted-foreground" aria-label="알림 설정 영역">
-          가격 알림 폼 (Task 8에서 연결됩니다)
+      {showAlertForm && lastParams && (
+        <div className="mt-4" aria-label="알림 설정 영역">
+          <AlertForm
+            searchContext={{
+              origin: lastParams.origin,
+              destination: lastParams.destination,
+              departFrom: lastParams.departFrom,
+              departTo: lastParams.departTo,
+              returnFrom: lastParams.returnFrom,
+              returnTo: lastParams.returnTo,
+              adults: lastParams.adults,
+              children: lastParams.children,
+            }}
+          />
         </div>
       )}
     </main>
